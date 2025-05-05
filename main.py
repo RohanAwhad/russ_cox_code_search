@@ -21,12 +21,17 @@ def main():
     console.print(f"[bold red]Error: {project_path} is not a valid directory[/bold red]")
     sys.exit(1)
 
-  searcher, file_mapping, observer = indexer.index_project(project_path)
+  searcher, file_mapping, observer = indexer.index_project(project_path, watch=True)
 
   while True:
     try:
       console.print("\n[bold]Enter a regex pattern to search (Ctrl+C to exit):[/bold]", end=" ")
       pattern = input()
+      # Auto-escape regex special characters if not starting with 'r:'
+      if not pattern.startswith('r:'):
+        pattern = re.escape(pattern)
+      else:
+        pattern = pattern[2:]  # Remove the 'r:' prefix
 
       with console.status("[bold green]Searching...[/bold green]"):
         results = searcher.search(pattern)
