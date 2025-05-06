@@ -28,6 +28,17 @@ def should_ignore(path: str, base_path: str, ignore_patterns: List[str]) -> bool
   """Check if a file should be ignored based on .gitignore patterns."""
   rel_path = os.path.relpath(path, base_path)
 
+  # Check if file or directory is hidden (starts with .)
+  basename = os.path.basename(path)
+  if basename.startswith('.'):
+    return True
+
+  # Check path components for hidden directories
+  path_parts = rel_path.split(os.sep)
+  for part in path_parts:
+    if part.startswith('.'):
+      return True
+
   for pattern in ignore_patterns:
     # Handle negation patterns
     if pattern.startswith('!'):
@@ -73,6 +84,9 @@ def get_ignore_patterns(project_path: str) -> List[str]:
       '*.swo',
       '*.log',
       '*.mypy_cache',
+      # Ignore all hidden files and directories (starting with .)
+      '.*',
+      '.*/',
   ])
 
   return ignore_patterns
