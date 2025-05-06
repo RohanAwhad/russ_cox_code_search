@@ -34,6 +34,7 @@ def index_project(
         continue
 
       try:
+        logger.debug(f'reading file: {file_path} ...')
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
           content = f.read()
         searcher.add_document(file_id, content)

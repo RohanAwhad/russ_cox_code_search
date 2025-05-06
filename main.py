@@ -1,77 +1,194 @@
-import re
+# /// script
+# dependencies = [
+#   "loguru",
+#   "watchdog",
+# ]
+# ///
+
+import json
 import os
 import sys
+import re
+from typing import Dict, Any
 
-from rich.console import Console
-from rich.panel import Panel
-
+from loguru import logger
 from src import indexer
 
-console = Console()
+# Set up logging
+logger.remove()
+logger.add("code_search.log", rotation="10 MB")
 
 
-def main():
-  if len(sys.argv) != 2:
-    console.print("[bold red]Usage: python code_search_cli.py <project_path>[/bold red]")
-    sys.exit(1)
+class CodeSearchServer:
 
-  project_path = sys.argv[1]
-
-  if not os.path.isdir(project_path):
-    console.print(f"[bold red]Error: {project_path} is not a valid directory[/bold red]")
-    sys.exit(1)
-
-  searcher, file_mapping, observer = indexer.index_project(project_path, watch=True)
-
-  while True:
+  def initialize(self, project_path: str) -> Dict[str, Any]:
+    """Initialize the searcher with the given project path"""
     try:
-      console.print("\n[bold]Enter a regex pattern to search (Ctrl+C to exit):[/bold]", end=" ")
-      pattern = input()
-      # Auto-escape regex special characters if not starting with 'r:'
+      self.project_path = os.path.abspath(project_path)
+      if not os.path.isdir(self.project_path):
+        return {"error": f"Invalid directory: {project_path}"}
+
+      logger.info(f"Initializing index for {self.project_path}")
+      self.searcher, self.file_mapping, self.observer = indexer.index_project(self.project_path, watch=True)
+
+      return {"status": "initialized", "files_indexed": len(self.file_mapping), "project_path": self.project_path}
+    except Exception as e:
+      logger.exception("Initialization error")
+      return {"error": str(e)}
+
+  def search(self, pattern: str, max_results: int = 100) -> Dict[str, Any]:
+    """Search for the given pattern"""
+    try:
+      if not self.searcher:
+        return {"error": "Searcher not initialized"}
+
+      # Process pattern (allow raw regex with r: prefix)
       if not pattern.startswith('r:'):
         pattern = re.escape(pattern)
       else:
-        pattern = pattern[2:]  # Remove the 'r:' prefix
+        pattern = pattern[2:]
 
-      with console.status("[bold green]Searching...[/bold green]"):
-        results = searcher.search(pattern)
+      results = self.searcher.search(pattern)
 
-      if not results:
-        console.print("[yellow]No matches found.[/yellow]")
-        continue
+      matches = []
+      for doc_id in results[:max_results]:
+        file_path = self.file_mapping[doc_id]
+        abs_path = os.path.join(self.project_path, file_path)
 
-      console.print(f"[green]Found {len(results)} matching files. Top results:[/green]")
-
-      for idx, doc_id in enumerate(results[:3]):
-        file_path = file_mapping[doc_id]
         try:
-          with open(os.path.join(project_path, file_path), 'r', encoding='utf-8', errors='ignore') as f:
+          with open(abs_path, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
 
-          # Find the first match in the file
-          match = re.search(pattern, content)
-          context = ""
-          if match:
-            start = max(0, match.start() - 50)
-            end = min(len(content), match.end() + 50)
-            context = "..." + content[start:end].replace("\n", "\\n") + "..."
+          # Find matches in the file
+          match_positions = []
+          for m in re.finditer(pattern, content):
+            context_start = max(0, m.start() - 50)
+            context_end = min(len(content), m.end() + 50)
 
-          console.print(
-              Panel(f"[bold]{file_path}[/bold]\n[dim]{context}[/dim]",
-                    title=f"Match {idx+1}",
-                    title_align="left",
-                    border_style="green"))
+            # Calculate line number
+            line_number = content.count('\n', 0, m.start()) + 1
+
+            match_positions.append({
+                "start": m.start(),
+                "end": m.end(),
+                "line": line_number,
+                "context": content[context_start:context_end]
+            })
+
+          matches.append({
+              "file": file_path,
+              "matches":
+                  match_positions[:5]  # Limit matches per file
+          })
         except Exception as e:
-          console.print(f"[yellow]Error reading {file_path}: {str(e)}[/yellow]")
+          logger.error(f"Error processing file {file_path}: {e}")
 
-    except KeyboardInterrupt:
-      console.print("\n[bold]Exiting...[/bold]")
-      if observer:
-        observer.stop()
-        observer.join()
-      break
+      return {"status": "success", "total_matches": len(results), "returned_matches": len(matches), "matches": matches}
     except Exception as e:
-      console.print(f"[bold red]Error: {str(e)}[/bold red]")
+      logger.exception("Search error")
+      return {"error": str(e)}
+
+  def shutdown(self) -> Dict[str, Any]:
+    """Stop the file watcher and clean up resources"""
+    try:
+      if self.observer:
+        self.observer.stop()
+        self.observer.join()
+        self.observer = None
+      return {"status": "shutdown"}
+    except Exception as e:
+      logger.exception("Shutdown error")
+      return {"error": str(e)}
+
+
+def read_message():
+  """Read a message using LSP-like protocol"""
+  content_length = 0
+
+  # Read headers
+  while True:
+    line = sys.stdin.readline().strip()
+    if not line:
+      break
+
+    if line.startswith("Content-Length: "):
+      content_length = int(line[16:])
+
+  # Read content
+  if content_length > 0:
+    content = sys.stdin.read(content_length)
+    return content
+
+  return None
+
+
+def write_message(response):
+  """Write a message using LSP-like protocol"""
+  content = json.dumps(response)
+  message = f"Content-Length: {len(content)}\n\n{content}"
+  sys.stdout.write(message)
+  sys.stdout.flush()
+
+
+def main():
+
+  server = None
+  try:
+    if len(sys.argv) != 2:
+      sys.stderr.write("Usage: python main.py <project_path>\n")
+      sys.exit(1)
+
+    project_path = sys.argv[1]
+    server = CodeSearchServer()
+
+    # Initialize with the project path
+    init_result = server.initialize(project_path)
+    write_message(init_result)
+
+    # Main loop
+    while True:
+      try:
+        message = read_message()
+        if not message:
+          continue
+
+        request = json.loads(message)
+
+        if "command" not in request:
+          write_message({"error": "Missing command"})
+          continue
+
+        if request["command"] == "search":
+          if "pattern" not in request:
+            write_message({"error": "Missing search pattern"})
+            continue
+
+          max_results = request.get("max_results", 100)
+          result = server.search(request["pattern"], max_results)
+          write_message(result)
+
+        elif request["command"] == "shutdown":
+          result = server.shutdown()
+          write_message(result)
+          break
+
+        else:
+          write_message({"error": f"Unknown command: {request['command']}"})
+
+      except json.JSONDecodeError:
+        write_message({"error": "Invalid JSON"})
+      except Exception as e:
+        logger.exception("Error processing message")
+        write_message({"error": str(e)})
+
+  except KeyboardInterrupt:
+    if server:
+      server.shutdown()
+    logger.info("Server stopped by user")
+  except Exception as e:
+    logger.exception("Unhandled exception")
+    sys.stderr.write(f"Error: {str(e)}\n")
+    sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -52,6 +52,21 @@ def get_ignore_patterns(project_path: str) -> List[str]:
   ignore_patterns = parse_gitignore(gitignore_path)
 
   # Add common patterns to always ignore
-  ignore_patterns.extend(['.git/', '.idea/', '__pycache__/', '*.pyc', '*.pyo', '*.so', '*.o', '*.obj', '.DS_Store'])
+  ignore_patterns.extend([
+      '.git/',
+      '.idea/',
+      '*__pycache__/',
+      '*.pyc',
+      '*.pyo',
+      '*.so',
+      '*.o',
+      '*.obj',
+      '*.DS_Store',
+      '*node_modules',
+      '*.venv',
+      '*.jpg',
+      '*.png',
+      '*uv.lock',
+  ])
 
   return ignore_patterns

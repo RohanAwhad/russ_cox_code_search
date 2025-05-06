@@ -1,3 +1,6 @@
 .dingllm
 __pycache__
 llm.md
+.mypy_cache
+.venv
+code_search.log
