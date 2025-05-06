@@ -1,3 +1,4 @@
 .dingllm
 __pycache__
 llm.md
+*.log
