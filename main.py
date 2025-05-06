@@ -9,14 +9,14 @@ import json
 import os
 import sys
 import re
-from typing import Dict, Any
+from typing import Any, Dict
 
 from loguru import logger
-from src import indexer
+from src import indexer, utils
 
 # Set up logging
 logger.remove()
-logger.add("code_search.log", rotation="10 MB")
+logger.add("hackhub.log", rotation="10 MB", mode='w')
 
 
 class CodeSearchServer:
@@ -166,6 +166,14 @@ def main():
           max_results = request.get("max_results", 100)
           result = server.search(request["pattern"], max_results)
           write_message(result)
+
+        elif request["command"] == "apply_changes":
+          if "changes" not in request:
+            write_message({"error": "Missing changes parameter"})
+            continue
+
+          utils.apply_all(request["changes"], project_path)
+          write_message({"status": "success", "message": "Changes applied"})
 
         elif request["command"] == "shutdown":
           result = server.shutdown()
