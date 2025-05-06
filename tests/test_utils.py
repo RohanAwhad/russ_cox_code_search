@@ -45,3 +45,53 @@ def test_search_and_replace():
   # Clean up
   os.remove(test_file)
   print("All search_and_replace tests passed!")
+
+
+def test_apply_changes():
+  initial_content = '''
+# some randome comment here
+
+def greeting(name):
+  print(f"Hello {name}!")
+
+
+# some random comment after the possible change
+    '''.strip()
+
+  file_name = 'hello_world.py'
+  project_path = '.'
+  file_path = os.path.join(project_path, file_name)
+
+  # Write initial content
+  with open(file_path, 'w') as f:
+    f.write(initial_content)
+
+  changes = f"""
+blah bah
+
+some random text
+
+
+```{file_name}
+<<<<<<< SEARCH
+def greeting(name):
+  print(f"Hello {{name}}!")
+=======
+def greeting():
+  print("Hello World!")
+>>>>>>> REPLACE
+```
+## An example with lines that are the same
+    """.strip()
+
+  # Apply changes (assuming utils.apply_all exists)
+  utils.apply_all(changes, str(project_path))
+
+  # Verify changes were applied
+  with open(file_path) as f:
+    content = f.read()
+    assert "def greeting():" in content
+    assert "print(\"Hello World!\")" in content
+    assert "name" not in content
+
+  os.remove(file_path)

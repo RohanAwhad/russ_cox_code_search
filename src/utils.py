@@ -1,5 +1,6 @@
 import fnmatch
 import os
+import re
 
 from pathlib import Path
 from typing import List
@@ -86,3 +87,56 @@ def search_and_replace(search_str: str, replace_str: str, file_path: str) -> Non
     logger.debug(f"Replaced all occurrences of '{search_str}' in {file_path}")
   except Exception as e:
     logger.error(f"Error replacing in {file_path}: {str(e)}")
+
+
+def apply_all(changes: str, project_path: str) -> None:
+  """
+  Parse and apply multiple search and replace blocks from the given changes string.
+
+  Args:
+    changes: A string containing multiple code blocks with search/replace sections
+    project_path: The base path of the project where files should be modified
+  """
+
+  # Extract code blocks
+  code_block_pattern = r'```(.*?)\n(.*?)```'
+  blocks = re.findall(code_block_pattern, changes, re.DOTALL)
+
+  if not blocks:
+    logger.warning("No code blocks found in the changes")
+    return
+
+  logger.info(f"Found {len(blocks)} code blocks to process")
+
+  for file_path_with_content, content in blocks:
+    # Extract the file path from the first line
+    file_path = file_path_with_content.strip()
+    if not file_path:
+      logger.warning("Skipping block with no file path")
+      continue
+
+    # Parse search and replace blocks
+    search_replace_pattern = r'<<<<<<< SEARCH\n(.*?)=======\n(.*?)>>>>>>> REPLACE'
+    search_replace_blocks = re.findall(search_replace_pattern, content, re.DOTALL)
+
+    if not search_replace_blocks:
+      logger.warning(f"No search/replace blocks found in block for {file_path}")
+      continue
+
+    # Create full file path
+    full_file_path = os.path.join(project_path, file_path.lstrip('/'))
+
+    # Ensure the file path exists
+    if not os.path.exists(full_file_path):
+      logger.warning(f"No file exists at: {full_file_path}")
+      continue
+
+    logger.info(f"Processing {len(search_replace_blocks)} search/replace blocks for {file_path}")
+
+    # Apply each search/replace block
+    for search_text, replace_text in search_replace_blocks:
+      try:
+        search_and_replace(search_text, replace_text, full_file_path)
+        logger.info(f"Applied changes to {file_path}")
+      except Exception as e:
+        logger.error(f"Error applying changes to {file_path}: {str(e)}")
