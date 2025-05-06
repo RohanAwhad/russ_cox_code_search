@@ -69,6 +69,10 @@ def get_ignore_patterns(project_path: str) -> List[str]:
       '*.jpg',
       '*.png',
       '*uv.lock',
+      '*.swp',
+      '*.swo',
+      '*.log',
+      '*.mypy_cache',
   ])
 
   return ignore_patterns
