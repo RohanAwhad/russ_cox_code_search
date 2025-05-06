@@ -94,4 +94,38 @@ def greeting():
     assert "print(\"Hello World!\")" in content
     assert "name" not in content
 
-  os.remove(file_path)
+    os.remove(file_path)
+
+
+def test_hidden_files_ignored():
+  """Test if files starting with a dot (hidden files) are properly ignored."""
+  # Create test directory structure
+  test_dir = "test_hidden_dir"
+  os.makedirs(test_dir, exist_ok=True)
+  
+  # Create a regular file and a hidden file with the same content
+  unique_content = f"UNIQUE_CONTENT_{os.urandom(4).hex()}"
+  regular_file = os.path.join(test_dir, "regular_file.txt")
+  hidden_file = os.path.join(test_dir, ".hidden_file.txt")
+  
+  with open(regular_file, 'w') as f:
+    f.write(unique_content)
+  
+  with open(hidden_file, 'w') as f:
+    f.write(unique_content)
+  
+  # Get all files in the directory using utils function
+  all_files = utils.list_files(test_dir)
+  
+  # Verify only regular file is included, hidden file is excluded
+  assert regular_file in all_files, "Regular file should be included in results"
+  assert hidden_file not in all_files, "Hidden file should not be included in results"
+  
+  # Clean up
+  os.remove(regular_file)
+  os.remove(hidden_file)
+  os.rmdir(test_dir)
+  
+  print("Hidden files exclusion test passed!")
+
+

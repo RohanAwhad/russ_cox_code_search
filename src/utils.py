@@ -169,7 +169,7 @@ def apply_all(changes: str, project_path: str) -> None:
     # Apply each search/replace block
     for search_text, replace_text in search_replace_blocks:
       try:
-        search_and_replace(search_text, replace_text, full_file_path)
+        search_and_replace(search_text.strip(), replace_text, full_file_path)
         logger.info(f"Applied changes to {file_path}")
       except Exception as e:
         logger.error(f"Error applying changes to {file_path}: {str(e)}")

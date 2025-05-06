@@ -16,7 +16,7 @@ from src import indexer, utils
 
 # Set up logging
 logger.remove()
-logger.add("hackhub.log", rotation="10 MB", mode='w')
+logger.add(".hackhub.log", rotation="10 MB", mode='w')
 
 
 class CodeSearchServer:
