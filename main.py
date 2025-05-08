@@ -173,12 +173,11 @@ def main():
             write_message({"error": "Missing changes parameter"})
             continue
 
-                    result = utils.apply_all(request["changes"], project_path)
+          result = utils.apply_all(request["changes"], project_path)
           if result == 0:
-              write_message({"status": "success", "message": "Changes applied successfully"})
+            write_message({"status": "success", "message": "Changes applied successfully"})
           else:
-              write_message({"status": "error", "message": "Failed to apply changes. No changes were made."})
-
+            write_message({"status": "error", "message": "Failed to apply changes. No changes were made."})
 
         elif request["command"] == "shutdown":
           result = server.shutdown()
