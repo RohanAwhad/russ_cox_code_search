@@ -103,7 +103,7 @@ def replace(file_path: str, start_idx: int, end_idx: int, replace_with: str) -> 
     f.write(new_content)
 
 
-def search_and_replace(search_str: str, replace_str: str, file_path: str) -> None:
+def search_and_replace(search_str: str, replace_str: str, file_path: str) -> int:
   """Search for content in file and replace all occurrences."""
   try:
     with open(file_path, 'r', encoding='utf-8') as f:
@@ -111,65 +111,100 @@ def search_and_replace(search_str: str, replace_str: str, file_path: str) -> Non
 
     if search_str not in content:
       logger.debug(f"'{search_str}' not found in {file_path}")
-      return
+      return 1
 
     new_content = content.replace(search_str, replace_str)
     with open(file_path, 'w', encoding='utf-8') as f:
       f.write(new_content)
 
     logger.debug(f"Replaced all occurrences of '{search_str}' in {file_path}")
+    return 0
   except Exception as e:
     logger.error(f"Error replacing in {file_path}: {str(e)}")
+    return 1
 
 
-def apply_all(changes: str, project_path: str) -> None:
-  """
-  Parse and apply multiple search and replace blocks from the given changes string.
-
-  Args:
-    changes: A string containing multiple code blocks with search/replace sections
-    project_path: The base path of the project where files should be modified
-  """
-
+# TODO: (rohan) make this atomic
+# Meaning when some changes are sent, if all the changes can be applied only then apply them
+# For this you can maintain a state of all the search and replaces you are making, and then when you hit an
+# error, undo everything based on the sate.
+# Use the error codes from search_and_replace
+# This function should also return 1 or 0. 0 if changes applied successfully else 1
+def apply_all(changes: str, project_path: str) -> int:
+  """Parse and apply multiple search and replace blocks from the given changes string atomically.
+    Returns 0 if all changes were applied successfully, 1 otherwise."""
   # Extract code blocks
   code_block_pattern = r'```(.*?)\n(.*?)```'
   blocks = re.findall(code_block_pattern, changes, re.DOTALL)
 
   if not blocks:
     logger.warning("No code blocks found in the changes")
-    return
+    return 1
 
   logger.info(f"Found {len(blocks)} code blocks to process")
 
+  files_to_modify = {}
+  # First pass: validate all files and collect search/replace blocks
   for file_path_with_content, content in blocks:
-    # Extract the file path from the first line
     file_path = file_path_with_content.strip()
     if not file_path:
       logger.warning("Skipping block with no file path")
-      continue
+      return 1
 
-    # Parse search and replace blocks
+    full_file_path = os.path.join(project_path, file_path.lstrip('/'))
+
+    if not os.path.exists(full_file_path):
+      logger.warning(f"No file exists at: {full_file_path}")
+      return 1
+
+    # Parse search/replace blocks
     search_replace_pattern = r'<<<<<<< SEARCH\n(.*?)=======\n(.*?)>>>>>>> REPLACE'
     search_replace_blocks = re.findall(search_replace_pattern, content, re.DOTALL)
 
     if not search_replace_blocks:
       logger.warning(f"No search/replace blocks found in block for {file_path}")
-      continue
+      return 1
 
-    # Create full file path
-    full_file_path = os.path.join(project_path, file_path.lstrip('/'))
+    if full_file_path not in files_to_modify:
+      files_to_modify[full_file_path] = []
+    files_to_modify[full_file_path].extend(search_replace_blocks)
 
-    # Ensure the file path exists
-    if not os.path.exists(full_file_path):
-      logger.warning(f"No file exists at: {full_file_path}")
-      continue
+  # Read original content of all files and prepare modified versions
+  original_contents = {}
+  modified_contents = {}
+  for file_path, blocks in files_to_modify.items():
+    try:
+      with open(file_path, 'r', encoding='utf-8') as f:
+        original_content = f.read()
+    except Exception as e:
+      logger.error(f"Error reading {file_path}: {str(e)}")
+      return 1
 
-    logger.info(f"Processing {len(search_replace_blocks)} search/replace blocks for {file_path}")
+    modified_content = original_content
+    for search_text, replace_text in blocks:
+      # Check if search_text exists in the current content
+      if search_text not in modified_content:
+        logger.error(f"Search pattern not found in {file_path}: {search_text}")
+        return 1
+      modified_content = modified_content.replace(search_text, replace_text)
 
-    # Apply each search/replace block
-    for search_text, replace_text in search_replace_blocks:
+    original_contents[file_path] = original_content
+    modified_contents[file_path] = modified_content
+
+  # Write all modified contents
+  try:
+    for file_path, content in modified_contents.items():
+      with open(file_path, 'w', encoding='utf-8') as f:
+        f.write(content)
+  except Exception as e:
+    logger.error(f"Error writing to {file_path}: {str(e)}")
+    # Restore all files
+    for path, orig_content in original_contents.items():
       try:
-        search_and_replace(search_text.strip(), replace_text, full_file_path)
-        logger.info(f"Applied changes to {file_path}")
+        with open(path, 'w', encoding='utf-8') as f:
+          f.write(orig_content)
       except Exception as e:
-        logger.error(f"Error applying changes to {file_path}: {str(e)}")
+        logger.error(f"Error restoring {path}: {str(e)}")
+    return 1
+
+  return 0

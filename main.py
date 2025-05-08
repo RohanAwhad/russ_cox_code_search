@@ -167,13 +167,18 @@ def main():
           result = server.search(request["pattern"], max_results)
           write_message(result)
 
+        # TODO: utils.apply_all should return 0/1. If it returns 0 success, else failure
         elif request["command"] == "apply_changes":
           if "changes" not in request:
             write_message({"error": "Missing changes parameter"})
             continue
 
-          utils.apply_all(request["changes"], project_path)
-          write_message({"status": "success", "message": "Changes applied"})
+                    result = utils.apply_all(request["changes"], project_path)
+          if result == 0:
+              write_message({"status": "success", "message": "Changes applied successfully"})
+          else:
+              write_message({"status": "error", "message": "Failed to apply changes. No changes were made."})
+
 
         elif request["command"] == "shutdown":
           result = server.shutdown()

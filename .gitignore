@@ -4,3 +4,4 @@ llm.md
 .mypy_cache
 .venv
 *.log
+test_hidden_dir
