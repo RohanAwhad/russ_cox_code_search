@@ -124,12 +124,6 @@ def search_and_replace(search_str: str, replace_str: str, file_path: str) -> int
     return 1
 
 
-# TODO: (rohan) make this atomic
-# Meaning when some changes are sent, if all the changes can be applied only then apply them
-# For this you can maintain a state of all the search and replaces you are making, and then when you hit an
-# error, undo everything based on the sate.
-# Use the error codes from search_and_replace
-# This function should also return 1 or 0. 0 if changes applied successfully else 1
 def apply_all(changes: str, project_path: str) -> int:
   """Parse and apply multiple search and replace blocks from the given changes string atomically.
     Returns 0 if all changes were applied successfully, 1 otherwise."""
@@ -144,7 +138,10 @@ def apply_all(changes: str, project_path: str) -> int:
   logger.info(f"Found {len(blocks)} code blocks to process")
 
   files_to_modify = {}
-  # First pass: validate all files and collect search/replace blocks
+  files_to_create = {}
+  search_replace_pattern = r'<<<<<<< SEARCH\n(.*?)\n=======\n(.*?)>>>>>>> REPLACE'
+
+  # First pass: validate and categorize blocks
   for file_path_with_content, content in blocks:
     file_path = file_path_with_content.strip()
     if not file_path:
@@ -153,21 +150,34 @@ def apply_all(changes: str, project_path: str) -> int:
 
     full_file_path = os.path.join(project_path, file_path.lstrip('/'))
 
-    if not os.path.exists(full_file_path):
-      logger.warning(f"No file exists at: {full_file_path}")
-      return 1
-
     # Parse search/replace blocks
-    search_replace_pattern = r'<<<<<<< SEARCH\n(.*?)=======\n(.*?)>>>>>>> REPLACE'
     search_replace_blocks = re.findall(search_replace_pattern, content, re.DOTALL)
 
     if not search_replace_blocks:
-      logger.warning(f"No search/replace blocks found in block for {file_path}")
-      return 1
+      # Check if file exists to determine if we should create it
+      if os.path.exists(full_file_path):
+        logger.warning(f"No search/replace blocks found in block for existing file {file_path}")
+        return 1
+      files_to_create[full_file_path] = content
+    else:
+      # Validate existing file for modification
+      if not os.path.exists(full_file_path):
+        logger.warning(f"No file exists at: {full_file_path}")
+        return 1
+      if full_file_path not in files_to_modify:
+        files_to_modify[full_file_path] = []
+      files_to_modify[full_file_path].extend(search_replace_blocks)
 
-    if full_file_path not in files_to_modify:
-      files_to_modify[full_file_path] = []
-    files_to_modify[full_file_path].extend(search_replace_blocks)
+  # Create new files first
+  try:
+    for file_path, content in files_to_create.items():
+      os.makedirs(os.path.dirname(file_path), exist_ok=True)
+      with open(file_path, 'w', encoding='utf-8') as f:
+        f.write(content)
+      logger.info(f"Created new file: {file_path}")
+  except Exception as e:
+    logger.error(f"Error creating file {file_path}: {str(e)}")
+    return 1
 
   # Read original content of all files and prepare modified versions
   original_contents = {}
