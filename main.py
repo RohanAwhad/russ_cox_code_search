@@ -16,6 +16,7 @@ from loguru import logger
 from src import utils
 from src.embedder import AsyncEmbedderClient
 from src.indexer import trgm, load_existing_embeddings
+from src.indexer.semantic import index_project_semantic
 
 # Set up logging
 logger.remove()
@@ -37,6 +38,21 @@ class CodeSearchServer:
       # Load existing semantic embeddings
       self.docstrings = load_existing_embeddings(self.project_path)
       logger.info(f"Loaded {len(self.docstrings)} semantic docstrings")
+
+      # Build semantic index if none exists
+      if not self.docstrings:
+        logger.info("No semantic index found. Building...")
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+          docstrings, _ = loop.run_until_complete(index_project_semantic(self.project_path))
+          self.docstrings = docstrings
+          logger.info(f"Semantic index built with {len(self.docstrings)} entries")
+        except Exception as e:
+          logger.error(f"Failed to build semantic index: {e}")
+          return {"error": f"Semantic index build failed: {e}"}
+        finally:
+          loop.close()
 
       return {"status": "initialized", "files_indexed": len(self.file_mapping), "project_path": self.project_path}
 
