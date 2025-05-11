@@ -24,24 +24,17 @@ def index_project(
   file_mapping: dict[int, str] = {}
 
   logger.info("Indexing project files...")
-  for root, dirs, files in os.walk(project_path):
-    # Filter out directories that should be ignored
-    dirs[:] = [d for d in dirs if not utils.should_ignore(os.path.join(root, d), project_path, ignore_patterns)]
+  for file_path in utils.list_files(project_path):
+    try:
 
-    for file in files:
-      file_path = os.path.join(root, file)
-      if utils.should_ignore(file_path, project_path, ignore_patterns):
-        continue
-
-      try:
-        logger.debug(f'reading file: {file_path} ...')
-        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-          content = f.read()
-        searcher.add_document(file_id, content)
-        file_mapping[file_id] = os.path.relpath(file_path, project_path)
-        file_id += 1
-      except Exception as e:
-        logger.error(f"Skipping {file_path}: {str(e)}")
+      logger.debug(f'reading file: {file_path} ...')
+      with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+        content = f.read()
+      searcher.add_document(file_id, content)
+      file_mapping[file_id] = os.path.relpath(file_path, project_path)
+      file_id += 1
+    except Exception as e:
+      logger.error(f"Skipping {file_path}: {str(e)}")
 
   logger.info(f"Indexed {file_id} files.")
 
