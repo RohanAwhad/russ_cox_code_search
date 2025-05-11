@@ -108,12 +108,13 @@ async def main():
       if not query or query.lower() == 'exit':
         break
 
-      top_results = await embedder.similarity_search(query, existing_docstrings)
+      results = await embedder.similarity_search(query, existing_docstrings)
 
       # Display results
       print("\nTop matching files:")
-      for i, (filepath, score) in enumerate(top_results, 1):
-        print(f"{i}. {filepath} (score: {score:.4f})")
+      for i, result in enumerate(results, 1):
+        print(f"{i}. {result['filepath']} (score: {result['similarity']:.4f})")
+
 
     except KeyboardInterrupt:
       break
