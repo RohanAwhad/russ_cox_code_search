@@ -10,8 +10,7 @@ from loguru import logger
 
 # first-party
 from src import utils
-from src.embedder import Embedder
-
+from src.embedder import AsyncEmbedderClient
 
 agent_system_prompt = '''
 Analyze the provided file and generate a concise module-level docstring or header comment.
@@ -26,7 +25,7 @@ agent = Agent(
 )
 
 
-async def process_file(file_path: Path, content: str, md5_hash: str, embedder: Embedder):
+async def process_file(file_path: Path, content: str, md5_hash: str, embedder: AsyncEmbedderClient):
 
   try:
     logger.info(f"Processing {file_path}")
@@ -37,8 +36,7 @@ async def process_file(file_path: Path, content: str, md5_hash: str, embedder: E
       return None
 
     docstring = result.output.strip()
-    embedding = embedder.encode(docstring)
-
+    embedding = (await embedder.encode([docstring]))[0]
 
     return {"filepath": str(file_path.resolve()), "md5": md5_hash, "docstring": docstring, "embedding": embedding}
 
@@ -81,9 +79,9 @@ async def main():
     except Exception as e:
       logger.error(f"Error reading {file_path}: {str(e)}")
 
-  embedder = Embedder()
-  tasks = [process_file(fp, cont, hash, embedder) for fp, cont, hash in files_to_process]
+  embedder = AsyncEmbedderClient()
 
+  tasks = [process_file(fp, cont, hash, embedder) for fp, cont, hash in files_to_process]
 
   results = await asyncio.gather(*tasks)
 
@@ -103,7 +101,6 @@ async def main():
 
   logger.info(f"Docstring generation complete. Results saved to {output_path}")
 
-
   # Start query interface
   while True:
     try:
@@ -111,8 +108,7 @@ async def main():
       if not query or query.lower() == 'exit':
         break
 
-      top_results = embedder.similarity_search(query, existing_docstrings)
-
+      top_results = await embedder.similarity_search(query, existing_docstrings)
 
       # Display results
       print("\nTop matching files:")

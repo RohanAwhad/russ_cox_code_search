@@ -5,3 +5,4 @@ llm.md
 .venv
 *.log
 test_hidden_dir
+docstrings.json

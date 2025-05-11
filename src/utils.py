@@ -109,7 +109,7 @@ def get_ignore_patterns(project_path: str) -> List[str]:
       # Ignore all hidden files and directories (starting with .)
       '.*',
       '.*/',
-      'docstrings.json'
+      'docstrings.json',
       '.dingllm/'
   ])
 
