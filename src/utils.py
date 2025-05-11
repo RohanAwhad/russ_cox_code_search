@@ -59,6 +59,24 @@ def should_ignore(path: str, base_path: str, ignore_patterns: List[str]) -> bool
   return False
 
 
+def list_files(project_path: str) -> List[str]:
+  """List all files in a project directory while respecting .gitignore and other ignore patterns."""
+  project_path = os.path.abspath(project_path)
+  ignore_patterns = get_ignore_patterns(project_path)
+  file_list = []
+
+  for root, dirs, files in os.walk(project_path):
+    # Filter out directories that should be ignored
+    dirs[:] = [d for d in dirs if not should_ignore(os.path.join(root, d), project_path, ignore_patterns)]
+
+    for file in files:
+      file_path = os.path.join(root, file)
+      if not should_ignore(file_path, project_path, ignore_patterns):
+        file_list.append(file_path)
+
+  return file_list
+
+
 def get_ignore_patterns(project_path: str) -> List[str]:
   """Get ignore patterns from .gitignore and add common patterns."""
   gitignore_path = Path(project_path) / '.gitignore'
@@ -87,9 +105,12 @@ def get_ignore_patterns(project_path: str) -> List[str]:
       '*.onnx',
       '*.bin',
       '*.mypy_cache',
+      '*.ttf',
       # Ignore all hidden files and directories (starting with .)
       '.*',
       '.*/',
+      'docstrings.json',
+      '.dingllm/'
   ])
 
   return ignore_patterns
@@ -140,7 +161,7 @@ def apply_all(changes: str, project_path: str) -> int:
 
   logger.info(f"Found {len(blocks)} code blocks to process")
 
-  files_to_modify = {}
+  files_to_modify: dict[str, list] = {}
   files_to_create = {}
   search_replace_pattern = r'<<<<<<< SEARCH\n(.*?)\n=======\n(.*?)>>>>>>> REPLACE'
 

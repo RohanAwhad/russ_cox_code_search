@@ -5,7 +5,7 @@ import sys
 from rich.console import Console
 from rich.panel import Panel
 
-from src import indexer
+from src.indexer import trgm
 
 console = Console()
 
@@ -21,7 +21,7 @@ def main():
     console.print(f"[bold red]Error: {project_path} is not a valid directory[/bold red]")
     sys.exit(1)
 
-  searcher, file_mapping, observer = indexer.index_project(project_path, watch=True)
+  searcher, file_mapping, observer = trgm.index_project(project_path, watch=True)
 
   while True:
     try:
