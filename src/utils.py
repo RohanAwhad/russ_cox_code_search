@@ -158,7 +158,7 @@ def apply_all(changes: str, project_path: str) -> int:
 
   logger.info(f"Found {len(blocks)} code blocks to process")
 
-  files_to_modify = {}
+  files_to_modify: dict[str, list] = {}
   files_to_create = {}
   search_replace_pattern = r'<<<<<<< SEARCH\n(.*?)\n=======\n(.*?)>>>>>>> REPLACE'
 
