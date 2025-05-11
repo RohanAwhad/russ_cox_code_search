@@ -7,7 +7,7 @@ import re
 from rich.console import Console
 from rich.table import Table
 from tqdm import tqdm
-from src import indexer
+from src.indexer import trgm
 
 
 def generate_random_pattern(length=3):
@@ -65,7 +65,7 @@ def benchmark(project_path, num_queries=100):
   # Measure indexing time
   console.print("[bold]Indexing project...[/bold]")
   t0 = time.time()
-  searcher, file_mapping, _ = indexer.index_project(project_path, watch=False)
+  searcher, file_mapping, _ = trgm.index_project(project_path, watch=False)
   indexing_time = time.time() - t0
 
   # Get document stats

@@ -12,7 +12,8 @@ import re
 from typing import Any, Dict
 
 from loguru import logger
-from src import indexer, utils
+from src import utils
+from src.indexer import trgm
 
 # Set up logging
 logger.remove()
@@ -29,7 +30,7 @@ class CodeSearchServer:
         return {"error": f"Invalid directory: {project_path}"}
 
       logger.info(f"Initializing index for {self.project_path}")
-      self.searcher, self.file_mapping, self.observer = indexer.index_project(self.project_path, watch=True)
+      self.searcher, self.file_mapping, self.observer = trgm.index_project(self.project_path, watch=True)
 
       return {"status": "initialized", "files_indexed": len(self.file_mapping), "project_path": self.project_path}
     except Exception as e:

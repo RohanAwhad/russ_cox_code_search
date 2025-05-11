@@ -1,6 +1,6 @@
 import os
 
-from src.indexer import index_project
+from src.indexer import trgm
 
 
 def test_index_project(tmpdir):
@@ -19,7 +19,7 @@ def test_index_project(tmpdir):
   }
 
   # Index the project
-  searcher, file_mapping, observer = index_project(str(project_dir))
+  searcher, file_mapping, observer = trgm.index_project(str(project_dir))
 
   # Verify results
   assert len(file_mapping) == 2
