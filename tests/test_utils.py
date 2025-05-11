@@ -68,13 +68,13 @@ def greeting(name):
 
   valid_changes = f"""
 ```{file_name}
-<<<<<< SEARCH
+<<<<<<< SEARCH
 def greeting(name):
   print(f"Hello {{name}}!")
-======
+=======
 def greeting():
   print("Hello World!")
->>>>>> REPLACE
+>>>>>>> REPLACE
 ```
   """.strip()
 
@@ -90,18 +90,18 @@ def greeting():
   # Test atomic rollback when invalid changes
   invalid_changes = f"""
 ```{file_name}
-<<<<<< SEARCH
+<<<<<<< SEARCH
 def greeting():
   print("Hello World!")
-======
+=======
 def updated_greeting():
   print("Updated greeting!")
->>>>>> REPLACE
-<<<<<< SEARCH
+>>>>>>> REPLACE
+<<<<<<< SEARCH
 # non-existent pattern to force failure
-======
+=======
 # this replacement should never happen
->>>>>> REPLACE
+>>>>>>> REPLACE
 ```
   """.strip()
 
@@ -141,7 +141,7 @@ def test_hidden_files_ignored():
   # Verify only regular file is included, hidden file is excluded
   abs_regular = os.path.abspath(regular_file)
   abs_hidden = os.path.abspath(hidden_file)
-  
+
   assert abs_regular in all_files, "Regular file should be included in results"
   assert abs_hidden not in all_files, "Hidden file should not be included in results"
 
