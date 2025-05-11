@@ -3,15 +3,15 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
-import numpy as np
 
 # third-party
 from pydantic_ai import Agent
 from loguru import logger
-from sentence_transformers import SentenceTransformer
 
 # first-party
 from src import utils
+from src.embedder import Embedder
+
 
 agent_system_prompt = '''
 Analyze the provided file and generate a concise module-level docstring or header comment.
@@ -26,7 +26,8 @@ agent = Agent(
 )
 
 
-async def process_file(file_path: Path, content: str, md5_hash: str, model: SentenceTransformer):
+async def process_file(file_path: Path, content: str, md5_hash: str, embedder: Embedder):
+
   try:
     logger.info(f"Processing {file_path}")
     result = await agent.run(f"Code to analyze:\n{content}")
@@ -36,7 +37,8 @@ async def process_file(file_path: Path, content: str, md5_hash: str, model: Sent
       return None
 
     docstring = result.output.strip()
-    embedding = model.encode([docstring])[0].tolist()
+    embedding = embedder.encode(docstring)
+
 
     return {"filepath": str(file_path.resolve()), "md5": md5_hash, "docstring": docstring, "embedding": embedding}
 
@@ -79,8 +81,9 @@ async def main():
     except Exception as e:
       logger.error(f"Error reading {file_path}: {str(e)}")
 
-  model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-  tasks = [process_file(fp, cont, hash, model) for fp, cont, hash in files_to_process]
+  embedder = Embedder()
+  tasks = [process_file(fp, cont, hash, embedder) for fp, cont, hash in files_to_process]
+
 
   results = await asyncio.gather(*tasks)
 
@@ -100,8 +103,6 @@ async def main():
 
   logger.info(f"Docstring generation complete. Results saved to {output_path}")
 
-  # Initialize embedding model
-  model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
 
   # Start query interface
   while True:
@@ -110,20 +111,8 @@ async def main():
       if not query or query.lower() == 'exit':
         break
 
-      # Generate query embedding
-      query_embedding = model.encode([query])[0]
+      top_results = embedder.similarity_search(query, existing_docstrings)
 
-      # Calculate similarities
-      similarities = []
-      for entry in existing_docstrings.values():
-        if 'embedding' in entry:
-          doc_embedding = np.array(entry['embedding'])
-          similarity = np.dot(query_embedding,
-                              doc_embedding) / (np.linalg.norm(query_embedding) * np.linalg.norm(doc_embedding))
-          similarities.append((entry['filepath'], similarity))
-
-      # Get top 3 results
-      top_results = sorted(similarities, key=lambda x: x[1], reverse=True)[:3]
 
       # Display results
       print("\nTop matching files:")
