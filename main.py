@@ -168,7 +168,6 @@ def main():
           result = server.search(request["pattern"], max_results)
           write_message(result)
 
-        # TODO: utils.apply_all should return 0/1. If it returns 0 success, else failure
         elif request["command"] == "apply_changes":
           if "changes" not in request:
             write_message({"error": "Missing changes parameter"})
