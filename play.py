@@ -3,10 +3,12 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import numpy as np
 
 # third-party
 from pydantic_ai import Agent
 from loguru import logger
+from sentence_transformers import SentenceTransformer
 
 # first-party
 from src import utils
@@ -24,7 +26,7 @@ agent = Agent(
 )
 
 
-async def process_file(file_path: Path, content: str, md5_hash: str):
+async def process_file(file_path: Path, content: str, md5_hash: str, model: SentenceTransformer):
   try:
     logger.info(f"Processing {file_path}")
     result = await agent.run(f"Code to analyze:\n{content}")
@@ -33,7 +35,11 @@ async def process_file(file_path: Path, content: str, md5_hash: str):
       logger.warning(f"No docstring generated for {file_path}")
       return None
 
-    return {"filepath": str(file_path.resolve()), "md5": md5_hash, "docstring": result.output.strip()}
+    docstring = result.output.strip()
+    embedding = model.encode([docstring])[0].tolist()
+
+    return {"filepath": str(file_path.resolve()), "md5": md5_hash, "docstring": docstring, "embedding": embedding}
+
   except Exception as e:
     logger.error(f"Error processing {file_path}: {str(e)}")
     return None
@@ -62,6 +68,8 @@ async def main():
     try:
       file_path = Path(file_path)
       content = file_path.read_text()
+      if not content:
+        continue
       md5_hash = hashlib.md5(content.encode()).hexdigest()
       existing_entry = existing_docstrings.get(str(file_path.resolve()), None)
       if existing_entry and existing_entry.get("MD5 hash") == md5_hash:
@@ -71,7 +79,9 @@ async def main():
     except Exception as e:
       logger.error(f"Error reading {file_path}: {str(e)}")
 
-  tasks = [process_file(fp, cont, hash) for fp, cont, hash in files_to_process]
+  model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+  tasks = [process_file(fp, cont, hash, model) for fp, cont, hash in files_to_process]
+
   results = await asyncio.gather(*tasks)
 
   # Merge new results into existing docstrings
@@ -80,7 +90,8 @@ async def main():
       existing_docstrings[result["filepath"]] = {
           "MD5 hash": result["md5"],
           "filepath": result["filepath"],
-          "docstring": result["docstring"]
+          "docstring": result["docstring"],
+          "embedding": result["embedding"]
       }
 
   # Save merged docstrings
@@ -88,6 +99,41 @@ async def main():
     json.dump(existing_docstrings, f, indent=2)
 
   logger.info(f"Docstring generation complete. Results saved to {output_path}")
+
+  # Initialize embedding model
+  model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+
+  # Start query interface
+  while True:
+    try:
+      query = input("\nEnter semantic search query (or 'exit' to quit): ").strip()
+      if not query or query.lower() == 'exit':
+        break
+
+      # Generate query embedding
+      query_embedding = model.encode([query])[0]
+
+      # Calculate similarities
+      similarities = []
+      for entry in existing_docstrings.values():
+        if 'embedding' in entry:
+          doc_embedding = np.array(entry['embedding'])
+          similarity = np.dot(query_embedding,
+                              doc_embedding) / (np.linalg.norm(query_embedding) * np.linalg.norm(doc_embedding))
+          similarities.append((entry['filepath'], similarity))
+
+      # Get top 3 results
+      top_results = sorted(similarities, key=lambda x: x[1], reverse=True)[:3]
+
+      # Display results
+      print("\nTop matching files:")
+      for i, (filepath, score) in enumerate(top_results, 1):
+        print(f"{i}. {filepath} (score: {score:.4f})")
+
+    except KeyboardInterrupt:
+      break
+    except Exception as e:
+      logger.error(f"Query error: {str(e)}")
 
 
 if __name__ == "__main__":
