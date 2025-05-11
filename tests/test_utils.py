@@ -62,16 +62,11 @@ def greeting(name):
   project_path = '.'
   file_path = os.path.join(project_path, file_name)
 
-  # Write initial content
+  # Test valid changes application
   with open(file_path, 'w') as f:
     f.write(initial_content)
 
-  changes = f"""
-blah bah
-
-some random text
-
-
+  valid_changes = f"""
 ```{file_name}
 <<<<<<< SEARCH
 def greeting(name):
@@ -81,20 +76,46 @@ def greeting():
   print("Hello World!")
 >>>>>>> REPLACE
 ```
-## An example with lines that are the same
-    """.strip()
+  """.strip()
 
-  # Apply changes (assuming utils.apply_all exists)
-  utils.apply_all(changes, str(project_path))
+  result = utils.apply_all(valid_changes, str(project_path))
+  assert result == 0, "Valid changes should return success code 0"
 
-  # Verify changes were applied
   with open(file_path) as f:
     content = f.read()
     assert "def greeting():" in content
     assert "print(\"Hello World!\")" in content
     assert "name" not in content
 
-    os.remove(file_path)
+  # Test atomic rollback when invalid changes
+  invalid_changes = f"""
+```{file_name}
+<<<<<<< SEARCH
+def greeting():
+  print("Hello World!")
+=======
+def updated_greeting():
+  print("Updated greeting!")
+>>>>>>> REPLACE
+<<<<<<< SEARCH
+# non-existent pattern to force failure
+=======
+# this replacement should never happen
+>>>>>>> REPLACE
+```
+  """.strip()
+
+  result = utils.apply_all(invalid_changes, str(project_path))
+  assert result == 1, "Invalid changes should return error code 1"
+
+  # Verify content remains from first valid change
+  with open(file_path) as f:
+    content = f.read()
+    assert "def greeting():" in content
+    assert "print(\"Hello World!\")" in content
+    assert "updated_greeting" not in content
+
+  os.remove(file_path)
 
 
 def test_hidden_files_ignored():
@@ -102,30 +123,28 @@ def test_hidden_files_ignored():
   # Create test directory structure
   test_dir = "test_hidden_dir"
   os.makedirs(test_dir, exist_ok=True)
-  
+
   # Create a regular file and a hidden file with the same content
   unique_content = f"UNIQUE_CONTENT_{os.urandom(4).hex()}"
   regular_file = os.path.join(test_dir, "regular_file.txt")
   hidden_file = os.path.join(test_dir, ".hidden_file.txt")
-  
+
   with open(regular_file, 'w') as f:
     f.write(unique_content)
-  
+
   with open(hidden_file, 'w') as f:
     f.write(unique_content)
-  
+
   # Get all files in the directory using utils function
   all_files = utils.list_files(test_dir)
-  
+
   # Verify only regular file is included, hidden file is excluded
   assert regular_file in all_files, "Regular file should be included in results"
   assert hidden_file not in all_files, "Hidden file should not be included in results"
-  
+
   # Clean up
   os.remove(regular_file)
   os.remove(hidden_file)
   os.rmdir(test_dir)
-  
+
   print("Hidden files exclusion test passed!")
-
-
