@@ -10,7 +10,9 @@ import json
 import os
 import sys
 import re
+import subprocess
 from typing import Any, Dict
+
 
 from loguru import logger
 from src import utils
@@ -25,7 +27,11 @@ logger.add(".hackhub.log", rotation="10 MB", mode='w')
 
 class CodeSearchServer:
 
+  def __init__(self):
+    self.embedder_process = None
+
   def initialize(self, project_path: str) -> Dict[str, Any]:
+
     """Initialize the searcher with the given project path"""
     try:
       self.project_path = os.path.abspath(project_path)
@@ -39,7 +45,43 @@ class CodeSearchServer:
       self.docstrings = load_existing_embeddings(self.project_path)
       logger.info(f"Loaded {len(self.docstrings)} semantic docstrings")
 
+      # Check embedder API health
+      logger.info("Checking embedder API health...")
+      loop = asyncio.new_event_loop()
+      asyncio.set_event_loop(loop)
+      embedder = AsyncEmbedderClient()
+      healthy = False
+      try:
+          healthy = loop.run_until_complete(embedder.healthcheck())
+          if not healthy:
+              logger.warning("Embedder API not responding. Attempting to start...")
+              # Start embedder API subprocess
+              self.embedder_process = subprocess.Popen(
+                  [sys.executable, "embedder_api.py"],
+                  stdout=subprocess.DEVNULL,
+                  stderr=subprocess.DEVNULL,
+                  cwd=os.getcwd(),
+                  start_new_session=True
+
+              )
+              # Wait for 2 seconds to start
+              loop.run_until_complete(asyncio.sleep(2))
+              # Check health again
+              healthy = loop.run_until_complete(embedder.healthcheck())
+              if not healthy:
+                  logger.error("Failed to start Embedder API. Semantic features may be unavailable.")
+              else:
+                  logger.info("Embedder API started successfully")
+          else:
+              logger.info("Embedder API is healthy")
+      except Exception as e:
+          logger.error(f"Embedder API healthcheck failed: {e}")
+      finally:
+          loop.run_until_complete(embedder.close())
+          loop.close()
+
       # Build semantic index if none exists
+
       if not self.docstrings:
         logger.info("No semantic index found. Building...")
         loop = asyncio.new_event_loop()

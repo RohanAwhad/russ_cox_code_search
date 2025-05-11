@@ -49,9 +49,18 @@ class AsyncEmbedderClient:
 
     return response.json()
 
+  async def healthcheck(self) -> bool:
+    """Check if the embedder API is responsive"""
+    try:
+        response = await self.client.get(f"{self.base_url}/")
+        return response.status_code == 200
+    except Exception:
+        return False
+
   async def close(self):
     """Close the HTTP client session."""
     await self.client.aclose()
+
 
 
 # Example usage
