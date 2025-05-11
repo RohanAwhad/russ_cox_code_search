@@ -5,6 +5,7 @@
 # ]
 # ///
 
+import asyncio
 import json
 import os
 import sys
@@ -13,7 +14,8 @@ from typing import Any, Dict
 
 from loguru import logger
 from src import utils
-from src.indexer import trgm
+from src.embedder import AsyncEmbedderClient
+from src.indexer import trgm, load_existing_embeddings
 
 # Set up logging
 logger.remove()
@@ -32,7 +34,12 @@ class CodeSearchServer:
       logger.info(f"Initializing index for {self.project_path}")
       self.searcher, self.file_mapping, self.observer = trgm.index_project(self.project_path, watch=True)
 
+      # Load existing semantic embeddings
+      self.docstrings = load_existing_embeddings(self.project_path)
+      logger.info(f"Loaded {len(self.docstrings)} semantic docstrings")
+
       return {"status": "initialized", "files_indexed": len(self.file_mapping), "project_path": self.project_path}
+
     except Exception as e:
       logger.exception("Initialization error")
       return {"error": str(e)}
@@ -87,6 +94,35 @@ class CodeSearchServer:
       return {"status": "success", "total_matches": len(results), "returned_matches": len(matches), "matches": matches}
     except Exception as e:
       logger.exception("Search error")
+      return {"error": str(e)}
+
+  def semantic_search(self, query: str) -> Dict[str, Any]:
+    """Perform semantic search using embeddings"""
+    try:
+      if not self.docstrings:
+        return {"error": "No semantic index available"}
+
+      # Create temporary event loop for async operations
+      loop = asyncio.new_event_loop()
+      asyncio.set_event_loop(loop)
+
+      embedder = AsyncEmbedderClient()
+
+      try:
+        results = loop.run_until_complete(embedder.similarity_search(query, self.docstrings, top_k=3))
+
+        formatted_results = []
+        for result in results:
+          file_info = self.docstrings.get(result["filepath"], {})
+          formatted_results.append({"filepath": result["filepath"], "docstring": file_info.get("docstring", "")})
+
+        return {"status": "success", "results": formatted_results}
+      finally:
+        loop.run_until_complete(embedder.close())
+        loop.close()
+
+    except Exception as e:
+      logger.error(f"Semantic search error: {str(e)}")
       return {"error": str(e)}
 
   def shutdown(self) -> Dict[str, Any]:
@@ -173,13 +209,22 @@ def main():
             write_message({"error": "Missing changes parameter"})
             continue
 
-          result = utils.apply_all(request["changes"], project_path)
-          if result == 0:
+          did_apply = utils.apply_all(request["changes"], project_path)
+          if did_apply == 0:
             write_message({"status": "success", "message": "Changes applied successfully"})
           else:
             write_message({"status": "error", "message": "Failed to apply changes. No changes were made."})
 
+        elif request["command"] == "ssearch":
+          if "query" not in request:
+            write_message({"error": "Missing query parameter"})
+            continue
+
+          result = server.semantic_search(request["query"])
+          write_message(result)
+
         elif request["command"] == "shutdown":
+
           result = server.shutdown()
           write_message(result)
           break
