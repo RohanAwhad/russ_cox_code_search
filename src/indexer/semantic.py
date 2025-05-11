@@ -13,6 +13,8 @@ from watchdog.observers.api import BaseObserver
 from src import utils, file_watcher
 from src.embedder import AsyncEmbedderClient
 
+DOCSTRINGS_FN = '.dingllm/docstrings.json'
+
 # Default agent system prompt
 _AGENT_SYSTEM_PROMPT = '''
 Analyze the provided file and generate a concise module-level docstring or header comment.
@@ -45,7 +47,7 @@ async def _process_file(file_path: Path, content: str, md5_hash: str, embedder: 
 
 def load_existing_embeddings(project_path: str) -> Dict[str, Any]:
   """Load existing embeddings from the project's docstrings.json file."""
-  output_path = Path(project_path) / "docstrings.json"
+  output_path = Path(project_path) / DOCSTRINGS_FN
   if output_path.exists():
     try:
       with open(output_path, "r") as f:
@@ -128,7 +130,8 @@ async def index_project_semantic(project_path: str,
         }
 
     # Save the updated docstrings
-    output_path = Path(project_path) / "docstrings.json"
+    output_path = Path(project_path) / DOCSTRINGS_FN
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
       json.dump(docstrings, f, indent=2)
 
