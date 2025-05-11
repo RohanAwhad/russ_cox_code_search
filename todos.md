@@ -6,6 +6,9 @@
     - Should try out on my own how potential this is.
 - [ ] Replace telescope grep, with my grep
 - [ ] Having like a linter just run and dump a few errors would be nice.  
+- [ ] add cost calculation
+    - [ ] push llm streaming to python? 
+
 
 ## Research:
 - [ ] Generating docstrings for scripts, and then using them for figuring out which code files to put in context
