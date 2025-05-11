@@ -105,9 +105,12 @@ def get_ignore_patterns(project_path: str) -> List[str]:
       '*.onnx',
       '*.bin',
       '*.mypy_cache',
+      '*.ttf',
       # Ignore all hidden files and directories (starting with .)
       '.*',
       '.*/',
+      'docstrings.json'
+      '.dingllm/'
   ])
 
   return ignore_patterns
