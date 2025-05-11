@@ -59,6 +59,24 @@ def should_ignore(path: str, base_path: str, ignore_patterns: List[str]) -> bool
   return False
 
 
+def list_files(project_path: str) -> List[str]:
+  """List all files in a project directory while respecting .gitignore and other ignore patterns."""
+  project_path = os.path.abspath(project_path)
+  ignore_patterns = get_ignore_patterns(project_path)
+  file_list = []
+
+  for root, dirs, files in os.walk(project_path):
+    # Filter out directories that should be ignored
+    dirs[:] = [d for d in dirs if not should_ignore(os.path.join(root, d), project_path, ignore_patterns)]
+
+    for file in files:
+      file_path = os.path.join(root, file)
+      if not should_ignore(file_path, project_path, ignore_patterns):
+        file_list.append(file_path)
+
+  return file_list
+
+
 def get_ignore_patterns(project_path: str) -> List[str]:
   """Get ignore patterns from .gitignore and add common patterns."""
   gitignore_path = Path(project_path) / '.gitignore'
@@ -95,7 +113,6 @@ def get_ignore_patterns(project_path: str) -> List[str]:
   return ignore_patterns
 
 
-def list_files(project_path: str) -> List[str]:
 def replace(file_path: str, start_idx: int, end_idx: int, replace_with: str) -> None:
   """Replace content in file from start_idx to end_idx with replace_with."""
   with open(file_path, 'r') as f:

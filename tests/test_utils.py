@@ -118,9 +118,13 @@ def test_hidden_files_ignored():
   all_files = utils.list_files(test_dir)
   
   # Verify only regular file is included, hidden file is excluded
-  assert regular_file in all_files, "Regular file should be included in results"
-  assert hidden_file not in all_files, "Hidden file should not be included in results"
+  # Get absolute paths for accurate comparison
+  abs_regular = os.path.abspath(regular_file)
+  abs_hidden = os.path.abspath(hidden_file)
   
+  assert abs_regular in all_files, "Regular file should be included in results"
+  assert abs_hidden not in all_files, "Hidden file should not be included in results"
+
   # Clean up
   os.remove(regular_file)
   os.remove(hidden_file)
