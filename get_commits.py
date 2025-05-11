@@ -47,7 +47,8 @@ def get_last_n_commits_diffs(n: int = 2):
     raise typer.Exit(code=1)
 
 
-def main(num_commits: int = typer.Option(2, "--num-commits", "-n", help="Number of commits to show diffs for"),):
+def main(num_commits: int = typer.Option(2, "--num-commits", "-n", help="Number of commits to show diffs for"),
+         markdown: bool = typer.Option(False, "--markdown", "-l", help="Output in markdown format")):
   """
     Show diffs for recent Git commits.
     """
@@ -64,12 +65,21 @@ def main(num_commits: int = typer.Option(2, "--num-commits", "-n", help="Number 
       commit_msg = diff_info["message"]
       diff_content = diff_info["diff"]
 
-      console.print(f"\n[bold green]Commit {commit_hash[:8]}[/bold green] - {commit_msg}")
-      syntax = Syntax(diff_content, "diff", theme="monokai", line_numbers=True)
-      console.print(Panel(syntax, expand=False))
+      if markdown:
+        print(f"## Commit {commit_hash[:8]} - {commit_msg}\n")
+        print("```diff")
+        print(diff_content)
+        print("```")
 
-      if i < len(diffs) - 1:
-        console.print("\n" + "-" * 80)
+        if i < len(diffs) - 1:
+          console.print("\n---\n")
+      else:
+        console.print(f"\n[bold green]Commit {commit_hash[:8]}[/bold green] - {commit_msg}")
+        syntax = Syntax(diff_content, "diff", theme="monokai", line_numbers=True)
+        console.print(Panel(syntax, expand=False))
+
+        if i < len(diffs) - 1:
+          console.print("\n" + "-" * 80)
 
   except Exception as e:
     console.print(f"[bold red]An error occurred:[/bold red] {str(e)}")
