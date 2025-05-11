@@ -83,6 +83,9 @@ def get_ignore_patterns(project_path: str) -> List[str]:
       '*.swp',
       '*.swo',
       '*.log',
+      '*.zip',
+      '*.onnx',
+      '*.bin',
       '*.mypy_cache',
       # Ignore all hidden files and directories (starting with .)
       '.*',
@@ -92,6 +95,7 @@ def get_ignore_patterns(project_path: str) -> List[str]:
   return ignore_patterns
 
 
+def list_files(project_path: str) -> List[str]:
 def replace(file_path: str, start_idx: int, end_idx: int, replace_with: str) -> None:
   """Replace content in file from start_idx to end_idx with replace_with."""
   with open(file_path, 'r') as f:
