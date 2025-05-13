@@ -26,25 +26,20 @@ class CodeSearchServer:
       logger.info(f"Initializing index for {self.project_path}")
       self.searcher, self.file_mapping, self.observer = trgm.index_project(self.project_path, watch=True)
 
-      # Load existing docstrings
-      self.docstrings = load_existing_docstrings(self.project_path)
-
-      if not self.docstrings:
-        logger.info("No docstrings found. Building...")
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-          docstrings, _ = loop.run_until_complete(index_project_semantic(self.project_path))
-          self.docstrings = docstrings
-          logger.info(f"Docstrings generated with {len(self.docstrings)} entries")
-        except Exception as e:
-          logger.error(f"Failed to generate docstrings: {e}")
-          return {"error": f"Docstring generation failed: {e}"}
-        finally:
-          loop.close()
-
-      logger.info(f"Loaded {len(self.docstrings)} docstrings")
-      return {"status": "initialized", "files_indexed": len(self.file_mapping), "project_path": self.project_path}
+      logger.info("No docstrings found. Building...")
+      loop = asyncio.new_event_loop()
+      asyncio.set_event_loop(loop)
+      try:
+        docstrings, _ = loop.run_until_complete(index_project_semantic(self.project_path))
+        self.docstrings = docstrings
+        logger.info(f"Docstrings generated with {len(self.docstrings)} entries")
+      except Exception as e:
+        logger.error(f"Failed to generate docstrings: {e}")
+        return {"error": f"Docstring generation failed: {e}"}
+      finally:
+        loop.close()
+        logger.info(f"Loaded {len(self.docstrings)} docstrings")
+        return {"status": "initialized", "files_indexed": len(self.file_mapping), "project_path": self.project_path}
 
     except Exception as e:
       logger.exception("Initialization error")
