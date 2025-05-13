@@ -110,7 +110,9 @@ def get_ignore_patterns(project_path: str) -> List[str]:
       '.*',
       '.*/',
       'docstrings.json',
-      '.dingllm/'
+      '.dingllm/',
+      'LICENSE',
+      'NOTICE',
   ])
 
   return ignore_patterns

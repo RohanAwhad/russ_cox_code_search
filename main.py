@@ -1,37 +1,22 @@
-# /// script
-# dependencies = [
-#   "loguru",
-#   "watchdog",
-# ]
-# ///
-
 import asyncio
 import json
 import os
 import sys
 import re
-import subprocess
 from typing import Any, Dict
-
 
 from loguru import logger
 from src import utils
-from src.embedder import AsyncEmbedderClient
-from src.indexer import trgm, load_existing_embeddings
+from src.indexer import trgm, load_existing_docstrings
 from src.indexer.semantic import index_project_semantic
-
-# Set up logging
-logger.remove()
-logger.add(".hackhub.log", rotation="10 MB", mode='w')
 
 
 class CodeSearchServer:
 
   def __init__(self):
-    self.embedder_process = None
+    pass
 
   def initialize(self, project_path: str) -> Dict[str, Any]:
-
     """Initialize the searcher with the given project path"""
     try:
       self.project_path = os.path.abspath(project_path)
@@ -41,61 +26,24 @@ class CodeSearchServer:
       logger.info(f"Initializing index for {self.project_path}")
       self.searcher, self.file_mapping, self.observer = trgm.index_project(self.project_path, watch=True)
 
-      # Load existing semantic embeddings
-      self.docstrings = load_existing_embeddings(self.project_path)
-      logger.info(f"Loaded {len(self.docstrings)} semantic docstrings")
-
-      # Check embedder API health
-      logger.info("Checking embedder API health...")
-      loop = asyncio.new_event_loop()
-      asyncio.set_event_loop(loop)
-      embedder = AsyncEmbedderClient()
-      healthy = False
-      try:
-          healthy = loop.run_until_complete(embedder.healthcheck())
-          if not healthy:
-              logger.warning("Embedder API not responding. Attempting to start...")
-              # Start embedder API subprocess
-              self.embedder_process = subprocess.Popen(
-                  [sys.executable, "embedder_api.py"],
-                  stdout=subprocess.DEVNULL,
-                  stderr=subprocess.DEVNULL,
-                  cwd=os.getcwd(),
-                  start_new_session=True
-
-              )
-              # Wait for 2 seconds to start
-              loop.run_until_complete(asyncio.sleep(2))
-              # Check health again
-              healthy = loop.run_until_complete(embedder.healthcheck())
-              if not healthy:
-                  logger.error("Failed to start Embedder API. Semantic features may be unavailable.")
-              else:
-                  logger.info("Embedder API started successfully")
-          else:
-              logger.info("Embedder API is healthy")
-      except Exception as e:
-          logger.error(f"Embedder API healthcheck failed: {e}")
-      finally:
-          loop.run_until_complete(embedder.close())
-          loop.close()
-
-      # Build semantic index if none exists
+      # Load existing docstrings
+      self.docstrings = load_existing_docstrings(self.project_path)
 
       if not self.docstrings:
-        logger.info("No semantic index found. Building...")
+        logger.info("No docstrings found. Building...")
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
           docstrings, _ = loop.run_until_complete(index_project_semantic(self.project_path))
           self.docstrings = docstrings
-          logger.info(f"Semantic index built with {len(self.docstrings)} entries")
+          logger.info(f"Docstrings generated with {len(self.docstrings)} entries")
         except Exception as e:
-          logger.error(f"Failed to build semantic index: {e}")
-          return {"error": f"Semantic index build failed: {e}"}
+          logger.error(f"Failed to generate docstrings: {e}")
+          return {"error": f"Docstring generation failed: {e}"}
         finally:
           loop.close()
 
+      logger.info(f"Loaded {len(self.docstrings)} docstrings")
       return {"status": "initialized", "files_indexed": len(self.file_mapping), "project_path": self.project_path}
 
     except Exception as e:
@@ -152,35 +100,6 @@ class CodeSearchServer:
       return {"status": "success", "total_matches": len(results), "returned_matches": len(matches), "matches": matches}
     except Exception as e:
       logger.exception("Search error")
-      return {"error": str(e)}
-
-  def semantic_search(self, query: str) -> Dict[str, Any]:
-    """Perform semantic search using embeddings"""
-    try:
-      if not self.docstrings:
-        return {"error": "No semantic index available"}
-
-      # Create temporary event loop for async operations
-      loop = asyncio.new_event_loop()
-      asyncio.set_event_loop(loop)
-
-      embedder = AsyncEmbedderClient()
-
-      try:
-        results = loop.run_until_complete(embedder.similarity_search(query, self.docstrings, top_k=3))
-
-        formatted_results = []
-        for result in results:
-          file_info = self.docstrings.get(result["filepath"], {})
-          formatted_results.append({"filepath": result["filepath"], "docstring": file_info.get("docstring", "")})
-
-        return {"status": "success", "results": formatted_results}
-      finally:
-        loop.run_until_complete(embedder.close())
-        loop.close()
-
-    except Exception as e:
-      logger.error(f"Semantic search error: {str(e)}")
       return {"error": str(e)}
 
   def shutdown(self) -> Dict[str, Any]:
@@ -273,16 +192,7 @@ def main():
           else:
             write_message({"status": "error", "message": "Failed to apply changes. No changes were made."})
 
-        elif request["command"] == "ssearch":
-          if "query" not in request:
-            write_message({"error": "Missing query parameter"})
-            continue
-
-          result = server.semantic_search(request["query"])
-          write_message(result)
-
         elif request["command"] == "shutdown":
-
           result = server.shutdown()
           write_message(result)
           break
