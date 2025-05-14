@@ -23,7 +23,8 @@ Keep it to one sentence unless absolutely necessary.
 '''.strip()
 
 
-async def _process_file(file_path: Path, content: str, md5_hash: str, agent: Agent) -> Optional[Dict[str, Any]]:
+async def _process_file(file_path: Path, content: str, md5_hash: str, agent: Agent,
+                        project_path: str) -> Optional[Dict[str, Any]]:
   """Process a single file to generate a docstring."""
   try:
     logger.info(f"Processing {file_path}")
@@ -34,9 +35,9 @@ async def _process_file(file_path: Path, content: str, md5_hash: str, agent: Age
       return None
 
     docstring = result.output.strip()
+    relative_path = str(file_path.resolve().relative_to(project_path))
 
-    return {"filepath": str(file_path.resolve()), "md5": md5_hash, "docstring": docstring}
-
+    return {"filepath": relative_path, "md5": md5_hash, "docstring": docstring}
   except Exception as e:
     logger.error(f"Error processing {file_path}: {str(e)}")
     return None
@@ -98,7 +99,7 @@ async def index_project_semantic(project_path: str,
     logger.info(f"Processing {len(files_to_process)} files for docstring generation...")
 
     # Process files in batches
-    tasks = [_process_file(fp, cont, hash, agent) for fp, cont, hash in files_to_process]
+    tasks = [_process_file(fp, cont, hash, agent, project_path) for fp, cont, hash in files_to_process]
     results = await asyncio.gather(*tasks)
 
     # Update docstrings dictionary with new results
