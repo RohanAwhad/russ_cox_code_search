@@ -57,7 +57,7 @@ def load_existing_docstrings(project_path: str) -> Dict[str, Any]:
 
 async def index_project_semantic(project_path: str,
                                  agent_model: str = "google-gla:gemini-2.0-flash",
-                                 watch: bool = False) -> Tuple[Dict[str, Any], Optional[BaseObserver]]:
+                                 watch: bool = False) -> Tuple[Dict[str, Dict[str, str]], Optional[BaseObserver]]:
   """
     Index all files in the project by generating docstrings.
     If watch=True, returns an active file watcher observer.

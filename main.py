@@ -6,15 +6,22 @@ import re
 from typing import Any, Dict
 
 from loguru import logger
+from watchdog.observers.api import BaseObserver
+
 from src import utils
+from src.code_search import TrigramRegexSearcher
 from src.indexer import trgm
-from src.indexer.semantic import index_project_semantic
+from src.indexer import semantic
 
 
 class CodeSearchServer:
 
   def __init__(self):
-    pass
+    self.project_path: str = ''
+    self.observer: BaseObserver | None = None
+    self.file_mapping: dict[int, str] = {}
+    self.searcher: TrigramRegexSearcher | None = None
+    self.docstrings: dict[str, dict[str, str]] = {}
 
   def initialize(self, project_path: str) -> Dict[str, Any]:
     """Initialize the searcher with the given project path"""
@@ -30,7 +37,7 @@ class CodeSearchServer:
       loop = asyncio.new_event_loop()
       asyncio.set_event_loop(loop)
       try:
-        docstrings, _ = loop.run_until_complete(index_project_semantic(self.project_path))
+        docstrings, _ = loop.run_until_complete(semantic.index_project_semantic(self.project_path))
         self.docstrings = docstrings
         logger.info(f"Docstrings generated with {len(self.docstrings)} entries")
       except Exception as e:
@@ -45,8 +52,13 @@ class CodeSearchServer:
       logger.exception("Initialization error")
       return {"error": str(e)}
 
-  def search(self, pattern: str, max_results: int = 100) -> Dict[str, Any]:
+  def search(self, request: dict[str, str | int]) -> Dict[str, Any]:
     """Search for the given pattern"""
+    if "pattern" not in request:
+      return {"error": "Missing search pattern"}
+
+    max_results: int = int(request.get("max_results", 100))
+    pattern: str = str(request['pattern'])
     try:
       if not self.searcher:
         return {"error": "Searcher not initialized"}
@@ -168,12 +180,7 @@ def main():
           continue
 
         if request["command"] == "search":
-          if "pattern" not in request:
-            write_message({"error": "Missing search pattern"})
-            continue
-
-          max_results = request.get("max_results", 100)
-          result = server.search(request["pattern"], max_results)
+          result = server.search(request)
           write_message(result)
 
         elif request["command"] == "apply_changes":

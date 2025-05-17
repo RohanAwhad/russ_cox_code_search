@@ -18,15 +18,12 @@ def index_project(
   project_path = os.path.abspath(project_path)
   searcher = code_search.TrigramRegexSearcher()
 
-  ignore_patterns = utils.get_ignore_patterns(project_path)
-
   file_id = 0
   file_mapping: dict[int, str] = {}
 
   logger.info("Indexing project files...")
   for file_path in utils.list_files(project_path):
     try:
-
       logger.debug(f'reading file: {file_path}')
       with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
         content = f.read()
