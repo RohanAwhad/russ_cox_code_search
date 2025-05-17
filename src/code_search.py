@@ -1,4 +1,5 @@
-import re, sre_parse
+import re
+import sre_parse
 from collections import defaultdict
 
 

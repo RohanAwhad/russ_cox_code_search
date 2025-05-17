@@ -27,7 +27,7 @@ def index_project(
   for file_path in utils.list_files(project_path):
     try:
 
-      logger.debug(f'reading file: {file_path} ...')
+      logger.debug(f'reading file: {file_path}')
       with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
         content = f.read()
       searcher.add_document(file_id, content)
