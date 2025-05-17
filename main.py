@@ -121,6 +121,16 @@ class CodeSearchServer:
       logger.exception("Shutdown error")
       return {"error": str(e)}
 
+  def apply_changes(self, request) -> Dict[str, Any]:
+    if "changes" not in request:
+      return {"error": "Missing changes parameter"}
+
+    did_apply = utils.apply_all(request["changes"], self.project_path)
+    if did_apply == 0:
+      return {"status": "success", "message": "Changes applied successfully"}
+
+    return {"status": "error", "message": "Failed to apply changes. No changes were made."}
+
 
 def read_message():
   """Read a message using LSP-like protocol"""
@@ -184,15 +194,8 @@ def main():
           write_message(result)
 
         elif request["command"] == "apply_changes":
-          if "changes" not in request:
-            write_message({"error": "Missing changes parameter"})
-            continue
-
-          did_apply = utils.apply_all(request["changes"], project_path)
-          if did_apply == 0:
-            write_message({"status": "success", "message": "Changes applied successfully"})
-          else:
-            write_message({"status": "error", "message": "Failed to apply changes. No changes were made."})
+          result = server.apply_changes(request)
+          write_message(result)
 
         elif request["command"] == "shutdown":
           result = server.shutdown()
