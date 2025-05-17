@@ -14,7 +14,7 @@ from src.indexer import trgm
 from src.indexer import semantic
 
 
-class CodeSearchServer:
+class ServerHandler:
 
   def __init__(self):
     self.project_path: str = ''
@@ -170,7 +170,7 @@ def main():
       sys.exit(1)
 
     project_path = sys.argv[1]
-    server = CodeSearchServer()
+    server = ServerHandler()
 
     # Initialize with the project path
     init_result = server.initialize(project_path)
