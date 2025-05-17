@@ -7,7 +7,7 @@ from typing import Any, Dict
 
 from loguru import logger
 from src import utils
-from src.indexer import trgm, load_existing_docstrings
+from src.indexer import trgm
 from src.indexer.semantic import index_project_semantic
 
 

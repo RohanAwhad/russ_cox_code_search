@@ -6,3 +6,5 @@ llm.md
 *.log
 test_hidden_dir
 docstrings.json
+.idea
+.DS_Store
