@@ -5,7 +5,7 @@ This document outlines the protocol for interacting with the code search service
 ### Starting the Service
 
 ```bash
-uvx /Users/rohan/1_Porn/russ_cox_code_search/master/main.py /path/to/your/project
+python main.py /path/to/your/project
 ```
 
 The server will index your project and begin watching for file changes.
@@ -95,7 +95,27 @@ Response:
 }
 ```
 
-#### 4. Shutdown
+#### 4. Run Tests
+
+Request:
+```json
+{
+  "command": "test"
+}
+```
+
+Response stream:
+```json
+{"type": "stdout", "output": "Running test suite..."}
+{"type": "stderr", "output": "Warning: Deprecation notice..."}
+{"status": "success", "return_code": 0}
+```
+
+- Streams real-time test output through separate messages
+- Final message contains return code
+- Requires a test script at `.dingllm/run_tests.sh` in the project root
+
+#### 5. Shutdown
 
 Request:
 ```json
