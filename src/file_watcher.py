@@ -3,45 +3,40 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from loguru import logger
 from src.utils import should_ignore, get_ignore_patterns
+from src.pubsub import PubSub
 
 
 class IndexUpdateHandler(FileSystemEventHandler):
 
-  def __init__(self, searcher, file_mapping, project_path, ignore_patterns):
+  def __init__(self, searcher, file_mapping, project_path, ignore_patterns, pubsub: PubSub):
     self.searcher = searcher
     self.file_mapping = file_mapping
     self.project_path = project_path
     self.ignore_patterns = ignore_patterns
-    self.next_id = max(file_mapping.keys()) + 1 if file_mapping else 0
-    # Reverse mapping for quick lookups
+    self.pubsub = pubsub
     self.path_to_id = {path: id for id, path in file_mapping.items()}
+    self.next_id = max(file_mapping.keys()) + 1 if file_mapping else 0
 
   def on_created(self, event):
-    if event.is_directory:
+    if event.is_directory or not event.src_path:
       return
-    self._index_file(event.src_path)
+    logger.info(f"File created: {event.src_path}")
+    self.pubsub.publish("file_created", event.src_path)
 
   def on_modified(self, event):
-    if event.is_directory:
+    if event.is_directory or not event.src_path:
       return
+    logger.info(f"File modified: {event.src_path}")
+    self.pubsub.publish("file_modified", event.src_path)
+
+    # Optional: Trigger reindexing of the file
     self._index_file(event.src_path)
 
   def on_deleted(self, event):
-    if event.is_directory:
+    if event.is_directory or not event.src_path:
       return
-    rel_path = os.path.relpath(event.src_path, self.project_path)
-    if rel_path in self.path_to_id:
-      file_id = self.path_to_id[rel_path]
-      # Remove from index
-      if file_id in self.searcher.docs:
-        del self.searcher.docs[file_id]
-      # Remove from all trigram posting lists
-      for docs in self.searcher.inv.values():
-        docs.discard(file_id)
-      # Update mappings
-      del self.file_mapping[file_id]
-      del self.path_to_id[rel_path]
-      logger.info(f"Removed {rel_path} from index")
+    logger.info(f"File deleted: {event.src_path}")
+    self.pubsub.publish("file_deleted", event.src_path)
 
   def _index_file(self, file_path):
     rel_path = os.path.relpath(file_path, self.project_path)
@@ -63,7 +58,6 @@ class IndexUpdateHandler(FileSystemEventHandler):
             self.searcher.inv[tg].discard(file_id)
         # Add new content
         self.searcher.add_document(file_id, content)
-        logger.info(f"Updated {rel_path} in index")
       else:
         # Add new file
         file_id = self.next_id
@@ -71,21 +65,17 @@ class IndexUpdateHandler(FileSystemEventHandler):
         self.searcher.add_document(file_id, content)
         self.file_mapping[file_id] = rel_path
         self.path_to_id[rel_path] = file_id
-        logger.info(f"Added {rel_path} to index")
+      logger.info(f"Indexed {rel_path}")
 
     except Exception as e:
       logger.error(f"Error indexing {file_path}: {str(e)}")
 
 
-def create_file_watcher(project_path, searcher, file_mapping):
-  """
-    Create and start a file watcher for the project directory.
-    Returns the observer that can be stopped later.
-    """
+def create_file_watcher(project_path, searcher, file_mapping, pubsub: PubSub):
   project_path = os.path.abspath(project_path)
   ignore_patterns = get_ignore_patterns(project_path)
 
-  event_handler = IndexUpdateHandler(searcher, file_mapping, project_path, ignore_patterns)
+  event_handler = IndexUpdateHandler(searcher, file_mapping, project_path, ignore_patterns, pubsub)
   observer = Observer()
   observer.schedule(event_handler, project_path, recursive=True)
   observer.start()

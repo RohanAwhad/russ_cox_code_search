@@ -10,6 +10,7 @@ from src import code_search, file_watcher, utils
 
 def index_project(
     project_path: str,
+    pubsub: PubSub,
     watch: bool = False) -> Tuple[code_search.TrigramRegexSearcher, dict[int, str], Optional[BaseObserver]]:
   """
     Index all files in the project, respecting .gitignore.
@@ -38,6 +39,7 @@ def index_project(
   # Set up watcher if requested
   observer = None
   if watch:
-    observer = file_watcher.create_file_watcher(project_path, searcher, file_mapping)
+    observer = file_watcher.create_file_watcher(project_path, searcher, file_mapping, pubsub)
 
   return searcher, file_mapping, observer
+

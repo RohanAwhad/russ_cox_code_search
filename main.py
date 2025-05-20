@@ -12,6 +12,7 @@ from src import utils
 from src.code_search import TrigramRegexSearcher
 from src.indexer import trgm
 from src.indexer import semantic
+from src.pubsub import PubSub
 
 
 class ServerHandler:
@@ -30,8 +31,15 @@ class ServerHandler:
       if not os.path.isdir(self.project_path):
         return {"error": f"Invalid directory: {project_path}"}
 
+      pubsub = PubSub()
+
+      # Subscribe to file events
+      pubsub.subscribe("file_created", self._handle_file_event)
+      pubsub.subscribe("file_modified", self._handle_file_event)
+      pubsub.subscribe("file_deleted", self._handle_file_event)
+
       logger.info(f"Initializing index for {self.project_path}")
-      self.searcher, self.file_mapping, self.observer = trgm.index_project(self.project_path, watch=True)
+      self.searcher, self.file_mapping, self.observer = trgm.index_project(self.project_path, watch=True, pubsub=pubsub)
 
       logger.info("No docstrings found. Building...")
       loop = asyncio.new_event_loop()
@@ -51,6 +59,59 @@ class ServerHandler:
     except Exception as e:
       logger.exception("Initialization error")
       return {"error": str(e)}
+
+  def _index_file(self, file_path):
+    rel_path = os.path.relpath(file_path, self.project_path)
+    if utils.should_ignore(file_path, self.project_path, self.ignore_patterns):
+      return
+
+    try:
+      with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+        content = f.read()
+
+      # If file exists in index, update it
+      if rel_path in self.path_to_id:
+        file_id = self.path_to_id[rel_path]
+        # Remove old trigrams
+        old_content = self.searcher.docs.get(file_id, "")
+        for i in range(len(old_content) - 2):
+          tg = old_content[i:i + 3]
+          if tg in self.searcher.inv:
+            self.searcher.inv[tg].discard(file_id)
+        # Add new content
+        self.searcher.add_document(file_id, content)
+      else:
+        # Add new file
+        file_id = self.next_id
+        self.next_id += 1
+        self.searcher.add_document(file_id, content)
+        self.file_mapping[file_id] = rel_path
+        self.path_to_id[rel_path] = file_id
+
+    except Exception as e:
+      logger.error(f"Error indexing {file_path}: {str(e)}")
+
+  def _delete_file(self, file_path):
+    rel_path = os.path.relpath(file_path, self.project_path)
+    if rel_path in self.path_to_id:
+      file_id = self.path_to_id[rel_path]
+      # Remove from index
+      if file_id in self.searcher.docs:
+        del self.searcher.docs[file_id]
+      # Remove from all trigram posting lists
+      for docs in self.searcher.inv.values():
+        docs.discard(file_id)
+      # Update mappings
+      del self.file_mapping[file_id]
+      del self.path_to_id[rel_path]
+
+  def _handle_file_event(self, event_type, file_path):
+    if event_type == "file_created":
+      self._index_file(file_path)
+    elif event_type == "file_modified":
+      self._index_file(file_path)
+    elif event_type == "file_deleted":
+      self._delete_file(file_path)
 
   def search(self, request: dict[str, str | int]) -> Dict[str, Any]:
     """Search for the given pattern"""
