@@ -6,6 +6,7 @@ from watchdog.observers.api import BaseObserver
 
 # first-party
 from src import code_search, file_watcher, utils
+from src.pubsub import PubSub
 
 
 def index_project(
@@ -42,4 +43,3 @@ def index_project(
     observer = file_watcher.create_file_watcher(project_path, searcher, file_mapping, pubsub)
 
   return searcher, file_mapping, observer
-

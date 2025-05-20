@@ -21,8 +21,10 @@ class ServerHandler:
     self.project_path: str = ''
     self.observer: BaseObserver | None = None
     self.file_mapping: dict[int, str] = {}
+    self.path_to_id: dict[str, int] = {}
     self.searcher: TrigramRegexSearcher | None = None
     self.docstrings: dict[str, dict[str, str]] = {}
+
 
   def initialize(self, project_path: str) -> Dict[str, Any]:
     """Initialize the searcher with the given project path"""
@@ -33,12 +35,16 @@ class ServerHandler:
 
       pubsub = PubSub()
 
+      # Get ignore patterns and initialize
+      self.ignore_patterns = utils.get_ignore_patterns(self.project_path)
+
       # Subscribe to file events
       pubsub.subscribe("file_created", self._handle_file_event)
       pubsub.subscribe("file_modified", self._handle_file_event)
       pubsub.subscribe("file_deleted", self._handle_file_event)
 
       logger.info(f"Initializing index for {self.project_path}")
+
       self.searcher, self.file_mapping, self.observer = trgm.index_project(self.project_path, watch=True, pubsub=pubsub)
 
       logger.info("No docstrings found. Building...")
