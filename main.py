@@ -4,6 +4,7 @@ import os
 import sys
 import re
 from typing import Any, Dict
+import select
 
 import subprocess
 from loguru import logger
@@ -215,45 +216,62 @@ def main():
                         )
 
                 elif request["command"] == "test":
-                    script_path = os.path.join(
-                        self.project_path, ".dingllm/run_tests.sh"
-                    )
+                    script_path = os.path.join(project_path, ".dingllm/run_tests.sh")
 
                     if not os.path.isfile(script_path):
                         write_message({"error": "Test script not found"})
-                        continue
+                        return
 
                     try:
-                        # Execute script and stream output
                         process = subprocess.Popen(
                             ["bash", script_path],
-                            cwd=self.project_path,
+                            cwd=project_path,
+                            text=True,
                             stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE,
-                            text=True,
+                            bufsize=1,  # Line buffered
+                            env={
+                                **os.environ,
+                                "PYTHONUNBUFFERED": "1",
+                                "STDBUF_I": "0",
+                                "STDBUF_O": "0",
+                                "STDBUF_E": "0",
+                            },
                         )
 
-                        # Stream output line by line
-                        while True:
-                            output = process.stdout.readline()
-                            if output == "" and process.poll() is not None:
+                        # Create file descriptor lists for select
+                        stdout_fd = process.stdout.fileno()
+                        stderr_fd = process.stderr.fileno()
+                        readable = {
+                            stdout_fd: process.stdout,
+                            stderr_fd: process.stderr,
+                        }
+
+                        while readable:
+                            # Wait for data to be available on either stdout or stderr
+                            ready, _, _ = select.select(readable, [], [])
+
+                            for fd in ready:
+                                line = readable[fd].readline()
+                                if not line:  # EOF
+                                    readable.pop(fd)
+                                    continue
+
+                                if fd == stdout_fd:
+                                    write_message(
+                                        {"type": "stdout", "output": line.strip()}
+                                    )
+                                else:
+                                    write_message(
+                                        {"type": "stderr", "output": line.strip()}
+                                    )
+
+                            # Check if process has exited and all output has been read
+                            if process.poll() is not None and not readable:
                                 break
-                            if output:
-                                write_message(
-                                    {"status": "output", "line": output.strip()}
-                                )
 
-                        # Get remaining output
-                        remaining_output = process.stdout.read() + process.stderr.read()
-                        for line in remaining_output.splitlines():
-                            write_message({"status": "output", "line": line.strip()})
-
-                        # Send completion message
                         write_message(
-                            {
-                                "status": "test_completed",
-                                "return_code": process.returncode,
-                            }
+                            {"status": "success", "return_code": process.returncode}
                         )
 
                     except Exception as e:
