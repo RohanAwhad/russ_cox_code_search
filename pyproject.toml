@@ -17,6 +17,7 @@ dependencies = [
 dev = [
     "ipython>=8.36.0",
     "mypy>=1.15.0",
+    "pytest-asyncio>=0.26.0",
     "pytest>=8.3.5",
     "rich>=14.0.0",
     "tqdm>=4.67.1",

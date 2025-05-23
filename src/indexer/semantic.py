@@ -86,10 +86,12 @@ async def index_project_semantic(project_path: str,
           continue
 
         md5_hash = hashlib.md5(content.encode()).hexdigest()
-        existing_entry = docstrings.get(str(file_path.resolve()), None)
+        relative_path_str = str(file_path.resolve().relative_to(project_path))
+        existing_entry = docstrings.get(relative_path_str, None)
 
         if existing_entry and existing_entry.get("md5") == md5_hash:
           logger.debug(f"Skipping {file_path} (hash unchanged)")
+
           continue
 
         files_to_process.append((file_path, content, md5_hash))
